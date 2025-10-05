@@ -7,6 +7,7 @@ export function AppProvider({ children }){
   const [districts, setDistricts] = useState([])
   const [selected, setSelected] = useState(null)
   const [toast, setToast] = useState(null)
+  const [showHindiDigits, setShowHindiDigits] = useState(false)
 
   function notify(message, type = 'info', ms = 4000){
     setToast({ message, type })
@@ -26,6 +27,8 @@ export function AppProvider({ children }){
     if (stored) {
       try { setSelected(JSON.parse(stored)) } catch(e){}
     }
+    const hd = localStorage.getItem('showHindiDigits')
+    if (hd === '1') setShowHindiDigits(true)
     if (!navigator.geolocation) return
     // request permission and location
     navigator.geolocation.getCurrentPosition(async pos => {
@@ -61,8 +64,14 @@ export function AppProvider({ children }){
     if (selected) localStorage.setItem('selectedDistrict', JSON.stringify(selected))
   }, [selected])
 
+  useEffect(() => {
+    localStorage.setItem('showHindiDigits', showHindiDigits ? '1' : '0')
+  }, [showHindiDigits])
+
+  function toggleHindiDigits() { setShowHindiDigits(s => !s) }
+
   return (
-    <AppContext.Provider value={{ districts, selected, setSelected }}>
+    <AppContext.Provider value={{ districts, selected, setSelected, notify, toast, showHindiDigits, toggleHindiDigits }}>
       {children}
     </AppContext.Provider>
   )
