@@ -25,4 +25,30 @@ router.get('/auto', async (req, res) => {
   }
 });
 
+router.post('/reverse', async (req, res) => {
+  try {
+    const { lat, lon } = req.body || {}
+    if (!lat || !lon) return res.status(400).json({ ok: false, error: 'lat/lon required' })
+    const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en`;
+    console.log('geo.reverse request', { lat, lon })
+    const nomResp = await fetch(nomUrl, { headers: { 'User-Agent': process.env.NOMINATIM_USER_AGENT || 'gramdarpan' } });
+    const nomJson = await nomResp.json();
+    const candidates = [nomJson.address?.district, nomJson.address?.county, nomJson.address?.city, nomJson.address?.town, nomJson.address?.village].filter(Boolean).map(s => String(s).trim());
+    console.log('geo.reverse nominatim address candidates', candidates)
+    const db = getDb();
+    for (const name of candidates) {
+      const hit = await db.collection('districts').findOne({ name: { $regex: `^${name}$`, $options: 'i' }, state: 'MP' });
+      if (hit) {
+        console.log('geo.reverse matched district', hit.name)
+        return res.json({ ok: true, method: 'nominatim', district: { id: hit.id, name: hit.name }, lat, lon });
+      }
+    }
+    console.log('geo.reverse no match for candidates')
+    res.json({ ok: true, method: 'nominatim', lat, lon, note: 'no exact district match found', candidates });
+  } catch (err) {
+    console.error('geo reverse error', err);
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
 module.exports = router;

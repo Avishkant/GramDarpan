@@ -1,17 +1,56 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import api from './api'
+import Navbar from './components/Navbar'
+import Home from './pages/Home'
+import Trends from './pages/Trends'
+import About from './pages/About'
+import { Routes, Route } from 'react-router-dom'
+
+function Sparkline({ data = [], width = 200, height = 40, color = '#0ea5e9' }) {
+  if (!data || data.length === 0) return null
+  const max = Math.max(...data)
+  const min = Math.min(...data)
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width
+    const y = height - ((v - min) / (max - min || 1)) * height
+    return `${x},${y}`
+  }).join(' ')
+  return <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <polyline fill="none" stroke={color} strokeWidth="2" points={points} />
+  </svg>
+}
+
+function DistrictCard({ d, onSelect }) {
+  return (
+    <button onClick={() => onSelect(d)} className="bg-white/5 hover:bg-white/6 border border-white/5 rounded-lg p-4 text-left transition transform hover:-translate-y-0.5">
+      <div className="font-semibold text-lg text-slate-100">{d.name}</div>
+    </button>
+  )
+}
 
 function App() {
   const [districts, setDistricts] = useState([])
-  const [coords, setCoords] = useState(null)
-  const [locStatus, setLocStatus] = useState('idle')
   const [selected, setSelected] = useState(null)
+  const [metrics, setMetrics] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [locStatus, setLocStatus] = useState('idle')
 
   useEffect(() => {
-    fetch('/api/districts').then(r => r.json()).then(setDistricts).catch(() => {
-      setDistricts([{ id: 'indore', name: 'Indore' }, { id: 'bhopal', name: 'Bhopal' }, { id: 'gwalior', name: 'Gwalior' }])
+    api.get('/districts').then(setDistricts).catch(() => {
+      setDistricts([{ id: 'indore', name: 'Indore' }, { id: 'bhopal', name: 'Bhopal' }])
     })
   }, [])
+
+  useEffect(() => {
+    if (!selected) return
+    setLoading(true)
+    api.get(`/${selected.id}/metrics`).then(data => {
+      setMetrics(data)
+    }).catch(err => {
+      setMetrics(null)
+    }).finally(() => setLoading(false))
+  }, [selected])
 
   function detectLocation() {
     if (!navigator.geolocation) {
@@ -20,44 +59,23 @@ function App() {
     }
     setLocStatus('asking')
     navigator.geolocation.getCurrentPosition(pos => {
-      setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
       setLocStatus('success')
+      // we keep privacy: client-only detection. Optionally you may call /api/geo/auto
     }, err => {
       setLocStatus('error')
     }, { enableHighAccuracy: true, timeout: 10000 })
   }
 
   return (
-    <div>
-      <h1>GramDarpan — MGNREGA (MP)</h1>
-
-      <section style={{margin: '1rem 0'}}>
-        <button onClick={detectLocation} style={{padding:'12px 18px',fontSize:16}}>Detect my location / मेरा स्थान खोजें</button>
-        {locStatus === 'asking' && <div style={{marginTop:8}}>Requesting location...</div>}
-        {locStatus === 'unsupported' && <div style={{marginTop:8,color:'red'}}>Geolocation not supported in your browser</div>}
-        {locStatus === 'error' && <div style={{marginTop:8,color:'red'}}>Unable to get location (permission denied or timeout)</div>}
-        {locStatus === 'success' && coords && (
-          <div style={{marginTop:8}}>
-            <div>Detected: Lat {coords.lat.toFixed(5)}, Lon {coords.lon.toFixed(5)} (±{Math.round(coords.accuracy)}m)</div>
-            <div style={{marginTop:8}}>Please confirm your district from the list below.</div>
-          </div>
-        )}
-      </section>
-
-      <section style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:12}}>
-        {districts.map(d => (
-          <button key={d.id} onClick={() => setSelected(d)} style={{padding:16,fontSize:16,borderRadius:8}}>
-            {d.name}
-          </button>
-        ))}
-      </section>
-
-      {selected && (
-        <section style={{marginTop:20}}>
-          <h2>Selected: {selected.name}</h2>
-          <div>Load metrics for this district next (not implemented yet)</div>
-        </section>
-      )}
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 text-slate-100">
+      <Navbar />
+      <div className="container mx-auto px-4 py-6 flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/trends" element={<Trends />} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </div>
     </div>
   )
 }

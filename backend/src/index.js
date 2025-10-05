@@ -23,7 +23,24 @@ async function start() {
   app.use('/api/geo', geoRoutes);
 
   const port = config.PORT;
-  app.listen(port, () => console.log('Backend running on', port));
+  const server = app.listen(port, () => console.log('Backend running on', port));
+  server.on('error', err => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`Port ${port} already in use. Kill the process using it or change PORT in .env and restart.`);
+      process.exit(1);
+    }
+    console.error('Server error', err);
+    process.exit(1);
+  });
+
+  // graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('Received SIGINT, shutting down...');
+    server.close(() => {
+      db.close && db.close();
+      process.exit(0);
+    });
+  });
 }
 
 start().catch(err => {

@@ -47,10 +47,24 @@ async function fetchAndStore(state = 'Madhya Pradesh') {
     let totalFetched = 0;
 
     while (true) {
-      const url = `${DATA_GOV_BASE}/${resourceId}?format=json&filters[state_name]=${encodeURIComponent(state)}&limit=${limit}&offset=${offset}&api-key=${apiKey}`;
+      const stateFilter = encodeURIComponent(String(state).toUpperCase());
+      const url = `${DATA_GOV_BASE}/${resourceId}?format=json&filters[state_name]=${stateFilter}&limit=${limit}&offset=${offset}&api-key=${apiKey}`;
       console.log('Fetching', url);
       const resp = await fetchWithRetry(url, 4, 1000);
       const body = resp.data || {};
+
+      // Fallback: if no records and this was probably due to state name casing, try without uppercasing once
+      if ((!body.records || body.records.length === 0) && offset === 0) {
+        console.log('No records returned for uppercase state filter; trying original state casing as fallback')
+        const url2 = `${DATA_GOV_BASE}/${resourceId}?format=json&filters[state_name]=${encodeURIComponent(state)}&limit=${limit}&offset=${offset}&api-key=${apiKey}`;
+        console.log('Fetching fallback', url2);
+        const resp2 = await fetchWithRetry(url2, 3, 1000);
+        const body2 = resp2.data || {};
+        if (body2.records && body2.records.length) {
+          console.log('Fallback fetch returned records')
+          body.records = body2.records
+        }
+      }
 
       // Store snapshot per page
       await db.collection('snapshots').insertOne({ fetched_at: new Date(), state, offset, limit, raw: body });
