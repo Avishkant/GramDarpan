@@ -41,10 +41,12 @@ async function fetchAndStore(state = 'Madhya Pradesh') {
     const resourceId = 'ee03643a-ee4c-48c2-ac30-9f2ff26ab722';
     const apiKey = process.env.DATA_GOV_API_KEY || '579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b';
 
-    // Pagination: fetch in pages using offset/limit
-    const limit = 100; // server may return fewer depending on key; sample key returns 10
-    let offset = 0;
-    let totalFetched = 0;
+  // Pagination: fetch in pages using offset/limit
+  const limit = 100; // server may return fewer depending on key; sample key returns 10
+  let offset = 0;
+  // totalFetched is declared above and used in finally/update; reuse it here (do not redeclare)
+  const maxPages = process.env.ETL_MAX_PAGES ? Number(process.env.ETL_MAX_PAGES) : null
+  let pageCount = 0
 
     while (true) {
       const stateFilter = encodeURIComponent(String(state).toUpperCase());
@@ -69,8 +71,8 @@ async function fetchAndStore(state = 'Madhya Pradesh') {
       // Store snapshot per page
       await db.collection('snapshots').insertOne({ fetched_at: new Date(), state, offset, limit, raw: body });
 
-      const records = body.records || [];
-      if (!records.length) break;
+  const records = body.records || [];
+  if (!records.length) break;
 
       // Helper to extract field by possible names
       const getField = (obj, candidates) => {
@@ -93,8 +95,9 @@ async function fetchAndStore(state = 'Madhya Pradesh') {
         // month can be provided as 'month' or 'reporting_month' or 'month_name'
         const monthRaw = getField(r, ['month', 'reporting_month', 'reportingMonth', 'month_name']) || null;
         // beneficiaries field variants
-        const beneficiariesRaw = getField(r, ['beneficiaries', 'no_of_beneficiaries', 'no_of_beneficiary']) || 0;
-        const daysWorkedRaw = getField(r, ['days_worked', 'daysworked', 'no_of_persondays']) || 0;
+  // Common field names observed in the dataset
+  const beneficiariesRaw = getField(r, ['Total_Individuals_Worked', 'Total_No_of_Workers', 'Total_No_of_Active_Workers', 'Total_No_of_Workers', 'no_of_beneficiaries', 'beneficiaries']) || 0;
+  const daysWorkedRaw = getField(r, ['Average_days_of_employment_provided_per_Household', 'Average_days_of_employment_provided_per_household', 'days_worked', 'no_of_persondays', 'daysworked']) || 0;
 
         // Normalize month into yyyy-mm when possible; otherwise keep raw
         let month = monthRaw || finYear || 'unknown';
@@ -129,8 +132,13 @@ async function fetchAndStore(state = 'Madhya Pradesh') {
         );
       }
 
-  totalFetched += records.length;
-  console.log(`Fetched ${records.length} records (offset ${offset}). Total fetched: ${totalFetched}`);
+      totalFetched += records.length;
+      pageCount += 1
+      console.log(`Fetched ${records.length} records (offset ${offset}). Total fetched: ${totalFetched}`);
+      if (maxPages && pageCount >= maxPages) {
+        console.log(`ETL_MAX_PAGES=${maxPages} reached, stopping early for test run`)
+        break
+      }
       // If fewer than limit returned, we are done
       if (records.length < limit) break;
       offset += limit;

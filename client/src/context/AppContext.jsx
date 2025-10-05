@@ -6,6 +6,15 @@ const AppContext = createContext(null)
 export function AppProvider({ children }){
   const [districts, setDistricts] = useState([])
   const [selected, setSelected] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function notify(message, type = 'info', ms = 4000){
+    setToast({ message, type })
+    if (ms) setTimeout(() => setToast(null), ms)
+  }
+
+  // expose for simple calls from components that don't use context directly
+  try { window.__gramdarpan_notify = notify } catch(e){}
 
   useEffect(() => {
     api.get('/districts').then(setDistricts).catch(() => setDistricts([]))
@@ -31,8 +40,14 @@ export function AppProvider({ children }){
         if (res && res.ok && res.district) {
           // ensure selected matches existing district id
           const match = districts.find(d => d.id === res.district.id) || districts.find(d => d.name.toLowerCase() === (res.district.name||'').toLowerCase())
-          if (match) setSelected(match)
-          else setSelected(res.district)
+          if (match) {
+            setSelected(match)
+            notify(`Detected district: ${match.name}`, 'success')
+          }
+          else {
+            setSelected(res.district)
+            notify(`Detected district: ${res.district.name}`, 'success')
+          }
         }
       } catch (err) {
         console.error('geo reverse error', err)

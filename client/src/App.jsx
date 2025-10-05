@@ -6,6 +6,8 @@ import Home from './pages/Home'
 import Trends from './pages/Trends'
 import About from './pages/About'
 import { Routes, Route } from 'react-router-dom'
+import { useApp } from './context/AppContext'
+import Toast from './components/Toast'
 
 function Sparkline({ data = [], width = 200, height = 40, color = '#0ea5e9' }) {
   if (!data || data.length === 0) return null
@@ -66,6 +68,8 @@ function App() {
     }, { enableHighAccuracy: true, timeout: 10000 })
   }
 
+  const { toast } = useApp()
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 text-slate-100">
       <Navbar />
@@ -76,6 +80,7 @@ function App() {
           <Route path="/about" element={<About />} />
         </Routes>
       </div>
+      <Toast toast={toast} />
     </div>
   )
 }

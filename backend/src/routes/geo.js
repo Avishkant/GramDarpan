@@ -36,13 +36,62 @@ router.post('/reverse', async (req, res) => {
     const candidates = [nomJson.address?.district, nomJson.address?.county, nomJson.address?.city, nomJson.address?.town, nomJson.address?.village].filter(Boolean).map(s => String(s).trim());
     console.log('geo.reverse nominatim address candidates', candidates)
     const db = getDb();
+    // Try exact matches first
+    const districts = await db.collection('districts').find({ state: { $exists: true } }).toArray();
+    const normalize = s => String(s||'').toLowerCase().replace(/\b(district|zilla|zila|districts)\b/g,'').replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim()
+
+    const normDistricts = districts.map(d => ({ ...d, _norm: normalize(d.name) }))
+    // exact match against candidates
     for (const name of candidates) {
-      const hit = await db.collection('districts').findOne({ name: { $regex: `^${name}$`, $options: 'i' }, state: 'MP' });
+      const n = normalize(name)
+      const hit = normDistricts.find(d => d._norm === n)
       if (hit) {
-        console.log('geo.reverse matched district', hit.name)
-        return res.json({ ok: true, method: 'nominatim', district: { id: hit.id, name: hit.name }, lat, lon });
+        console.log('geo.reverse exact match', hit.name)
+        return res.json({ ok: true, method: 'nominatim-exact', district: { id: hit.id, name: hit.name }, lat, lon });
       }
     }
+
+    // startsWith / includes
+    for (const name of candidates) {
+      const n = normalize(name)
+      const hit = normDistricts.find(d => d._norm.startsWith(n) || d._norm.includes(n))
+      if (hit) {
+        console.log('geo.reverse includes match', hit.name)
+        return res.json({ ok: true, method: 'nominatim-include', district: { id: hit.id, name: hit.name }, lat, lon, candidate: name });
+      }
+    }
+
+    // fallback: simple Levenshtein distance
+    const levenshtein = (a,b) => {
+      const m = a.length, n = b.length
+      const dp = Array.from({length:m+1},()=>Array(n+1).fill(0))
+      for(let i=0;i<=m;i++) dp[i][0]=i
+      for(let j=0;j<=n;j++) dp[0][j]=j
+      for(let i=1;i<=m;i++){
+        for(let j=1;j<=n;j++){
+          const cost = a[i-1]===b[j-1]?0:1
+          dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost)
+        }
+      }
+      return dp[m][n]
+    }
+
+    let best = null
+    for (const name of candidates) {
+      const n = normalize(name)
+      for (const d of normDistricts) {
+        const dist = levenshtein(n, d._norm)
+        const thresh = Math.max(1, Math.floor(d._norm.length * 0.25))
+        if (dist <= thresh) {
+          if (!best || dist < best.dist) best = { dist, d, candidate: name }
+        }
+      }
+    }
+    if (best) {
+      console.log('geo.reverse fuzzy match', best.d.name, 'candidate', best.candidate, 'dist', best.dist)
+      return res.json({ ok: true, method: 'nominatim-fuzzy', district: { id: best.d.id, name: best.d.name }, lat, lon, candidate: best.candidate, dist: best.dist });
+    }
+
     console.log('geo.reverse no match for candidates')
     res.json({ ok: true, method: 'nominatim', lat, lon, note: 'no exact district match found', candidates });
   } catch (err) {

@@ -8,6 +8,7 @@ const districtRoutes = require('./routes/districts');
 const metricsRoutes = require('./routes/metrics');
 const adminRoutes = require('./routes/admin');
 const geoRoutes = require('./routes/geo');
+const reportRoutes = require('./routes/report');
 
 const app = express();
 app.use(cors());
@@ -19,6 +20,7 @@ async function start() {
   app.use('/api/health', healthRoutes);
   app.use('/api/districts', districtRoutes);
   app.use('/api', metricsRoutes);
+  app.use('/api/report', reportRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/geo', geoRoutes);
 
