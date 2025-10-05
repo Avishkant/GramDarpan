@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "etl": "node src/etl/fetch_mgnrega.js"
+    "etl": "node src/etl/fetch_mgnrega.js",
+    "validate": "node validate-structure.js"
   },
   "dependencies": {
     "axios": "^1.4.0",
