@@ -2,6 +2,7 @@
 const express = require('express')
 const router = express.Router()
 const { getDb } = require('../db')
+const config = require('../config')
 
 // Helpers
 function pointInPolygon(lon, lat, geojson) {
@@ -45,6 +46,30 @@ const levenshtein = (a, b) => {
 
 const normalize = s => String(s || '').toLowerCase().replace(/\b(district|zilla|zila|districts)\b/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
 
+// Small in-memory cache for Nominatim responses to avoid repeated network calls during tests
+const nominatimCache = new Map()
+const NOM_CACHE_TTL = 1000 * 60 * 60 // 1 hour
+const NOM_CACHE_MAX = 300
+const NOMINATIM_USER_AGENT = config.NOMINATIM_USER_AGENT || 'gramdarpan'
+
+async function fetchNominatim(url) {
+  const now = Date.now()
+  const e = nominatimCache.get(url)
+  if (e && (now - e.ts) < NOM_CACHE_TTL) return e.data
+  const resp = await fetch(url, { headers: { 'User-Agent': NOMINATIM_USER_AGENT } })
+  const json = await resp.json()
+  nominatimCache.set(url, { ts: now, data: json })
+  if (nominatimCache.size > NOM_CACHE_MAX) {
+    const k = nominatimCache.keys().next().value
+    nominatimCache.delete(k)
+  }
+  return json
+}
+
+// small in-memory cache for reverse results
+const geoCache = new Map()
+const GEO_CACHE_TTL = 1000 * 60 * 60 // 1 hour
+
 // /api/geo/auto - IP-based fallback (returns candidates and lat/lon)
 router.get('/auto', async (req, res) => {
   try {
@@ -55,8 +80,7 @@ router.get('/auto', async (req, res) => {
     const { lat, lon } = { lat: ipJson.lat, lon: ipJson.lon }
     // quick nominatim probe to collect candidates
     const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&polygon_geojson=1`
-    const nomResp = await fetch(nomUrl, { headers: { 'User-Agent': process.env.NOMINATIM_USER_AGENT || 'gramdarpan' } })
-    const nomJson = await nomResp.json()
+    const nomJson = await fetchNominatim(nomUrl)
     const addr = nomJson.address || {}
     const candidates = []
     ;['district', 'county', 'city_district', 'state_district', 'city', 'town', 'village', 'municipality', 'suburb', 'hamlet', 'locality', 'region', 'county_code', 'administrative'].forEach(k => { if (addr[k]) candidates.push(String(addr[k]).trim()) })
@@ -74,6 +98,19 @@ router.post('/reverse', async (req, res) => {
     const { lat, lon } = req.body || {}
     if (lat === undefined || lon === undefined) return res.status(400).json({ ok: false, error: 'lat/lon required' })
     const db = getDb()
+    const redis = req.redisClient
+    // use rounded coords as cache key to allow hits near same location
+    const key = `reverse:${Math.round(lat*10000)}:${Math.round(lon*10000)}`
+    // try cache first
+    try {
+      if (redis) {
+        const cached = await redis.get(key)
+        if (cached) return res.json(JSON.parse(cached))
+      } else {
+        const mem = geoCache.get(key)
+        if (mem && (Date.now() - mem.ts) < GEO_CACHE_TTL) return res.json(mem.data)
+      }
+    } catch (e) { /* ignore cache errors */ }
 
     // 1) Try DB polygons first (fast & authoritative if present)
     try {
@@ -94,9 +131,8 @@ router.post('/reverse', async (req, res) => {
     }
 
     // 2) Nominatim reverse
-    const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&polygon_geojson=1`
-    const nomResp = await fetch(nomUrl, { headers: { 'User-Agent': process.env.NOMINATIM_USER_AGENT || 'gramdarpan' } })
-    const nomJson = await nomResp.json()
+  const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en&polygon_geojson=1`
+  const nomJson = await fetchNominatim(nomUrl)
     const addr = nomJson.address || {}
     const candidates = []
     ;['district', 'county', 'city_district', 'state_district', 'city', 'town', 'village', 'municipality', 'suburb', 'hamlet', 'locality', 'region', 'administrative', 'county_code'].forEach(k => { if (addr[k]) candidates.push(String(addr[k]).trim()) })
@@ -105,9 +141,7 @@ router.post('/reverse', async (req, res) => {
     // Enrich via lookup if place_id present
     if (nomJson.place_id) {
       try {
-        const lookupUrl = `https://nominatim.openstreetmap.org/lookup?format=jsonv2&place_ids=${nomJson.place_id}&extratags=1&namedetails=1`
-        const lookupResp = await fetch(lookupUrl, { headers: { 'User-Agent': process.env.NOMINATIM_USER_AGENT || 'gramdarpan' } })
-        const lookupJson = await lookupResp.json()
+        const lookupJson = await fetchNominatim(`https://nominatim.openstreetmap.org/lookup?format=jsonv2&place_ids=${nomJson.place_id}&extratags=1&namedetails=1`)
         if (Array.isArray(lookupJson) && lookupJson.length) {
           const ld = lookupJson[0]
           if (ld.namedetails) Object.values(ld.namedetails).forEach(v => { if (v) candidates.push(String(v).trim()) })
@@ -182,7 +216,12 @@ router.post('/reverse', async (req, res) => {
     }
 
     // nothing matched
-    res.json({ ok: true, method: 'nominatim', lat, lon, note: 'no exact district match found', candidates })
+    const out = { ok: true, method: 'nominatim', lat, lon, note: 'no exact district match found', candidates }
+    try {
+      if (redis) await redis.set(key, JSON.stringify(out), 'EX', Math.floor(GEO_CACHE_TTL/1000))
+      else geoCache.set(key, { ts: Date.now(), data: out })
+    } catch (e) {}
+    res.json(out)
   } catch (err) {
     console.error('geo reverse error', err)
     res.status(500).json({ ok: false, error: String(err) })

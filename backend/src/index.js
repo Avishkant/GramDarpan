@@ -14,15 +14,60 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Optional rate-limiting (use express-rate-limit if installed)
+let rateLimit
+try {
+  rateLimit = require('express-rate-limit')
+} catch (e) {
+  rateLimit = null
+}
+
+// Simple default limiter fallback if module not available
+const defaultLimiter = (req, res, next) => next()
+
+// Redis client optional (used later by routes if available)
+let redisClient = null
+if (process.env.REDIS_URL) {
+  try {
+    const IoRedis = require('ioredis')
+    redisClient = new IoRedis(process.env.REDIS_URL)
+    redisClient.on('error', (e) => console.warn('Redis error', e && e.message))
+  } catch (e) {
+    console.warn('ioredis not installed or failed to init; proceeding without Redis')
+    redisClient = null
+  }
+}
+
+// Apply rate limits to important routes
+const geoLimiter = rateLimit ? rateLimit({ windowMs: 60 * 1000, max: 30 }) : defaultLimiter
+const reportLimiter = rateLimit ? rateLimit({ windowMs: 60 * 1000, max: 60 }) : defaultLimiter
+const adminLimiter = rateLimit ? rateLimit({ windowMs: 60 * 1000, max: 5 }) : defaultLimiter
+
 async function start() {
   await db.connect();
+
+  // expose redis client and cache module to routes via app.locals
+  app.locals.redisClient = redisClient
+  try {
+    app.locals.cache = require('./cache')
+  } catch (e) {
+    app.locals.cache = null
+  }
+
+    // optional scheduler
+    try {
+      const scheduler = require('./scheduler')
+      scheduler.startScheduler()
+    } catch (e) {
+      // scheduler optional
+    }
 
   app.use('/api/health', healthRoutes);
   app.use('/api/districts', districtRoutes);
   app.use('/api', metricsRoutes);
-  app.use('/api/report', reportRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/geo', geoRoutes);
+  app.use('/api/report', reportLimiter, (req, res, next) => { req.redisClient = redisClient; next()}, reportRoutes);
+  app.use('/api/admin', adminLimiter, (req, res, next) => { req.redisClient = redisClient; next()}, adminRoutes);
+  app.use('/api/geo', geoLimiter, (req, res, next) => { req.redisClient = redisClient; next()}, geoRoutes);
 
   const port = config.PORT;
   const server = app.listen(port, () => console.log('Backend running on', port));

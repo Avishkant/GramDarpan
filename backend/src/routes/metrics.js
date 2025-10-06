@@ -14,13 +14,14 @@ router.get('/:id/metrics', async (req, res) => {
   const latestMonth = timeseries[timeseries.length - 1].month;
   const latestBeneficiaries = timeseries[timeseries.length - 1].beneficiaries;
 
+  // Build deterministic list of districts with their beneficiaries for the latest month
   const pipeline = [
     { $match: { month: latestMonth } },
-    { $group: { _id: '$district_id', beneficiaries: { $first: '$beneficiaries' } } },
-    { $sort: { beneficiaries: -1 } }
+    { $group: { _id: '$district_id', beneficiaries: { $max: '$beneficiaries' } } },
+    { $sort: { beneficiaries: -1, _id: 1 } }
   ];
   const allLatest = await db.collection('district_monthly').aggregate(pipeline).toArray();
-  const rank = allLatest.findIndex(d => d._id === id) + 1;
+  const rank = allLatest.findIndex(d => String(d._id) === String(id)) + 1;
   const percentile = allLatest.length ? Math.round(((allLatest.length - rank) / allLatest.length) * 100) : 0;
 
   res.json({ district_id: id, name: rows[0].name, timeseries, comparison: { state_percentile: percentile, latest_month: latestMonth, latest_beneficiaries: latestBeneficiaries } });
