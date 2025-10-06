@@ -2,9 +2,12 @@ import { useMemo } from 'react'
 import { useApp } from '../context/AppContext'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 export default function DistrictSelector(){
   const { districts, selected, setSelected } = useApp()
+  const { autoDetect } = useApp()
+  const [dbg, setDbg] = useState({ perm: null, pos: null, err: null })
   const { register, watch } = useForm({ defaultValues: { q: '' } })
   const q = watch('q') || ''
   const filtered = useMemo(() => districts.filter(d => d.name.toLowerCase().includes(q.toLowerCase())), [districts, q])
@@ -22,6 +25,41 @@ export default function DistrictSelector(){
         <div className="mt-2">
           <input {...register('q')} placeholder="Search district (e.g. Bhopal) — जिला ढूंढें" aria-label="Search district" className="w-full p-3 rounded-lg bg-slate-800 text-white placeholder-slate-400 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
         </div>
+      </div>
+
+      <div className="mb-3 flex items-center gap-2">
+        <button onClick={() => autoDetect()} className="px-4 py-2 rounded-md bg-cyan-500 text-slate-900 font-semibold">Auto-detect district</button>
+        <div className="text-sm text-slate-400">if location permission allowed, we will try to detect your district</div>
+      </div>
+
+      {/* Debug panel to diagnose geolocation/permission issues */}
+      <div className="mb-3 border-t pt-3">
+        <details>
+          <summary className="text-sm text-slate-300">Debug: location permission & test</summary>
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button onClick={async () => {
+                // query permission
+                try {
+                  const p = navigator.permissions ? await navigator.permissions.query({ name: 'geolocation' }) : null
+                  setDbg(d => ({ ...d, perm: p ? p.state : 'unsupported' }))
+                } catch (e) { setDbg(d => ({ ...d, perm: 'error' })) }
+              }} className="px-3 py-2 bg-slate-700 rounded text-white">Check permission state</button>
+
+              <button onClick={async () => {
+                try {
+                  await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(pos => resolve(pos), err => reject(err), { timeout: 15000 })
+                  }).then(p => setDbg(d => ({ ...d, pos: { lat: p.coords.latitude, lon: p.coords.longitude }, err: null }))).catch(e => setDbg(d => ({ ...d, err: e, pos: null })))
+                } catch (e) { setDbg(d => ({ ...d, err: e })) }
+              }} className="px-3 py-2 bg-slate-700 rounded text-white">Run getCurrentPosition</button>
+            </div>
+            <div className="text-sm text-slate-400">Permission: <span className="text-white">{String(dbg.perm)}</span></div>
+            <div className="text-sm text-slate-400">Position: <span className="text-white">{dbg.pos ? `${dbg.pos.lat}, ${dbg.pos.lon}` : '-'}</span></div>
+            <div className="text-sm text-rose-400">Error: <span className="text-white">{dbg.err ? (dbg.err.message || JSON.stringify(dbg.err)) : '-'}</span></div>
+            <div className="text-xs text-slate-300">If permission shows 'denied', open Chrome site settings → Location → Allow or Reset permissions, then retry.</div>
+          </div>
+        </details>
       </div>
 
       <div className="mt-3">
