@@ -3,9 +3,10 @@ import { useApp } from '../context/AppContext'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { API_BASE } from '../api'
 
 export default function DistrictSelector(){
-  const { districts, selected, setSelected } = useApp()
+  const { districts, selected, setSelected, districtDiagnostics } = useApp()
   const { autoDetect } = useApp()
   const [dbg, setDbg] = useState({ perm: null, pos: null, err: null })
   const { register, watch } = useForm({ defaultValues: { q: '' } })
@@ -14,6 +15,34 @@ export default function DistrictSelector(){
 
   return (
     <div>
+      {districts.length === 0 && (
+        <div className="mb-3 p-3 rounded border border-rose-600 bg-rose-900/20">
+          <div className="font-semibold text-white">No districts loaded</div>
+          <div className="text-sm text-slate-300">API_BASE: <span className="text-white">{API_BASE || '(empty)'}</span></div>
+          <details className="mt-2 text-xs text-slate-300" open={Boolean(districtDiagnostics)}>
+            <summary>{districtDiagnostics ? (districtDiagnostics.success ? 'Load succeeded — details' : 'Load failed — details') : 'Show debug data'}</summary>
+            <pre className="text-xs mt-2 bg-slate-800 p-2 rounded text-white">{JSON.stringify(districts, null, 2)}</pre>
+            {districtDiagnostics && (
+              <div className="mt-2 text-xs text-slate-300">
+                <div>Diagnostics: {districtDiagnostics.success ? 'success' : 'failure'}</div>
+                {Array.isArray(districtDiagnostics.attempts) && (
+                  <div className="mt-1">
+                    <div className="font-semibold text-white">Attempts</div>
+                    <ul className="text-xs list-disc pl-5 mt-1 text-slate-300">
+                      {districtDiagnostics.attempts.map((a, i) => (
+                        <li key={i}>
+                          <div><span className="text-white">{a.url}</span> — {a.status ? `status ${a.status}` : `error ${a.error}`}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <pre className="mt-2 bg-slate-800 p-2 rounded text-white">{JSON.stringify(districtDiagnostics, null, 2)}</pre>
+              </div>
+            )}
+          </details>
+        </div>
+      )}
       <div className="mb-3">
         <div className="flex items-center justify-between">
           <div>

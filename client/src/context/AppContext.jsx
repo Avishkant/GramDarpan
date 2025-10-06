@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import api from '../api'
+import api, { API_BASE } from '../api'
 
 const AppContext = createContext(null)
 
@@ -7,6 +7,7 @@ export function AppProvider({ children }){
   const [districts, setDistricts] = useState([])
   const [selected, setSelected] = useState(null)
   const [toast, setToast] = useState(null)
+  const [districtDiagnostics, setDistrictDiagnostics] = useState(null)
   const [showHindiDigits, setShowHindiDigits] = useState(false)
   const [autoDetectAttempted, setAutoDetectAttempted] = useState(false)
 
@@ -19,7 +20,51 @@ export function AppProvider({ children }){
   try { window.__gramdarpan_notify = notify } catch(e){}
 
   useEffect(() => {
-    api.get('/districts').then(setDistricts).catch(() => setDistricts([]))
+    // show which API base the client is using (helps debug env issues)
+    try { console.info('API_BASE:', API_BASE) } catch (e) {}
+
+    let cancelled = false
+
+    async function loadDistricts() {
+      const candidates = []
+      if (API_BASE) candidates.push(`${API_BASE.replace(/\/$/, '')}/api/districts`)
+      candidates.push('/api/districts')
+      if (typeof window !== 'undefined') candidates.push(`${window.location.origin}/api/districts`)
+
+      const errors = []
+      const attempts = []
+      for (const url of candidates) {
+        try {
+          console.info('Trying districts URL:', url)
+          const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+          const text = await res.text()
+          let json = null
+          try { json = text ? JSON.parse(text) : null } catch (e) { /* not json */ }
+          attempts.push({ url, status: res.status, ok: res.ok, body: json || text })
+          // Accept either a raw array or common wrapper shapes returned by some servers
+          const resolvedArray = Array.isArray(json) ? json : (json && Array.isArray(json.districts) ? json.districts : (json && Array.isArray(json.data) ? json.data : null))
+          if (res.ok && Array.isArray(resolvedArray)) {
+            if (!cancelled) setDistricts(resolvedArray)
+            if (!cancelled) setDistrictDiagnostics({ success: true, url, attempts })
+            return
+          }
+          errors.push({ url, status: res.status, ok: res.ok, body: json || text })
+        } catch (err) {
+          console.error('Fetch error for', url, err)
+          attempts.push({ url, error: String(err) })
+          errors.push({ url, error: String(err) })
+        }
+      }
+
+      console.error('All district fetch attempts failed', errors)
+      try { notify('Failed to load districts from server. See console for details (tried: ' + candidates.join(', ') + ')', 'error', 12000) } catch(e){}
+      if (!cancelled) setDistrictDiagnostics({ success: false, attempts, errors })
+      // No fallback: keep districts empty to ensure the app displays real data only
+      if (!cancelled) setDistricts([])
+    }
+
+    loadDistricts()
+    return () => { cancelled = true }
   }, [])
 
   // on load, restore selection and preferences
