@@ -1,0 +1,10 @@
+{
+  "name": "gramdarpan-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "cd backend && node index.js",
+    "start:backend": "cd backend && node index.js",
+    "start:client": "cd client && npm run dev"
+  }
+}
