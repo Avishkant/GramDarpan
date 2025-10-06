@@ -20,7 +20,7 @@ export default function DistrictSelector(){
             <div className="text-sm text-slate-300">Choose district <span className="text-slate-400">/ जिला चुनें</span></div>
             <div className="text-lg font-semibold">Select your district</div>
           </div>
-          <div className="text-sm text-slate-400">{filtered.length} found</div>
+          <div className="text-sm text-slate-400">53 found</div>
         </div>
         <div className="mt-2">
           <input {...register('q')} placeholder="Search district (e.g. Bhopal) — जिला ढूंढें" aria-label="Search district" className="w-full p-3 rounded-lg bg-slate-800 text-white placeholder-slate-400 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
@@ -34,7 +34,7 @@ export default function DistrictSelector(){
 
       {/* Debug panel to diagnose geolocation/permission issues */}
       <div className="mb-3 border-t pt-3">
-        <details>
+        {/* <details>
           <summary className="text-sm text-slate-300">Debug: location permission & test</summary>
           <div className="mt-2 flex flex-col gap-2">
             <div className="flex gap-2">
@@ -59,7 +59,7 @@ export default function DistrictSelector(){
             <div className="text-sm text-rose-400">Error: <span className="text-white">{dbg.err ? (dbg.err.message || JSON.stringify(dbg.err)) : '-'}</span></div>
             <div className="text-xs text-slate-300">If permission shows 'denied', open Chrome site settings → Location → Allow or Reset permissions, then retry.</div>
           </div>
-        </details>
+        </details> */}
       </div>
 
       <div className="mt-3">
