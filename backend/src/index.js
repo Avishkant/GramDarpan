@@ -11,7 +11,18 @@ const geoRoutes = require('./routes/geo');
 const reportRoutes = require('./routes/report');
 
 const app = express();
-app.use(cors());
+
+// Configure CORS: in production set CLIENT_URL in env to the allowed origin.
+// In local development when CLIENT_URL is not set, allow all origins for convenience.
+const corsOptions = {}
+if (config.CLIENT_URL) {
+  corsOptions.origin = config.CLIENT_URL
+  console.log('CORS: restricting to origin', config.CLIENT_URL)
+} else {
+  corsOptions.origin = true // allow all
+  console.log('CORS: allowing all origins (no CLIENT_URL set)')
+}
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Optional rate-limiting (use express-rate-limit if installed)

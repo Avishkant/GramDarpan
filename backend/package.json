@@ -1,10 +1,10 @@
 {
   "name": "gramdarpan-backend",
   "version": "0.1.0",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "etl": "node src/etl/fetch_mgnrega.js",
     "import-geo": "node scripts/import_district_geojson.js"
   },
