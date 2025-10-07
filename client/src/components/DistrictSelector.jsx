@@ -19,28 +19,6 @@ export default function DistrictSelector(){
         <div className="mb-3 p-3 rounded border border-rose-600 bg-rose-900/20">
           <div className="font-semibold text-white">No districts loaded</div>
           <div className="text-sm text-slate-300">API_BASE: <span className="text-white">{API_BASE || '(empty)'}</span></div>
-          <details className="mt-2 text-xs text-slate-300" open={Boolean(districtDiagnostics)}>
-            <summary>{districtDiagnostics ? (districtDiagnostics.success ? 'Load succeeded — details' : 'Load failed — details') : 'Show debug data'}</summary>
-            <pre className="text-xs mt-2 bg-slate-800 p-2 rounded text-white">{JSON.stringify(districts, null, 2)}</pre>
-            {districtDiagnostics && (
-              <div className="mt-2 text-xs text-slate-300">
-                <div>Diagnostics: {districtDiagnostics.success ? 'success' : 'failure'}</div>
-                {Array.isArray(districtDiagnostics.attempts) && (
-                  <div className="mt-1">
-                    <div className="font-semibold text-white">Attempts</div>
-                    <ul className="text-xs list-disc pl-5 mt-1 text-slate-300">
-                      {districtDiagnostics.attempts.map((a, i) => (
-                        <li key={i}>
-                          <div><span className="text-white">{a.url}</span> — {a.status ? `status ${a.status}` : `error ${a.error}`}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <pre className="mt-2 bg-slate-800 p-2 rounded text-white">{JSON.stringify(districtDiagnostics, null, 2)}</pre>
-              </div>
-            )}
-          </details>
         </div>
       )}
       <div className="mb-3">
@@ -61,35 +39,7 @@ export default function DistrictSelector(){
         <div className="text-sm text-slate-400">if location permission allowed, we will try to detect your district</div>
       </div>
 
-      {/* Debug panel to diagnose geolocation/permission issues */}
-      <div className="mb-3 border-t pt-3">
-        <details>
-          <summary className="text-sm text-slate-300">Debug: location permission & test</summary>
-          <div className="mt-2 flex flex-col gap-2">
-            <div className="flex gap-2">
-              <button onClick={async () => {
-                // query permission
-                try {
-                  const p = navigator.permissions ? await navigator.permissions.query({ name: 'geolocation' }) : null
-                  setDbg(d => ({ ...d, perm: p ? p.state : 'unsupported' }))
-                } catch (e) { setDbg(d => ({ ...d, perm: 'error' })) }
-              }} className="px-3 py-2 bg-slate-700 rounded text-white">Check permission state</button>
-
-              <button onClick={async () => {
-                try {
-                  await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(pos => resolve(pos), err => reject(err), { timeout: 15000 })
-                  }).then(p => setDbg(d => ({ ...d, pos: { lat: p.coords.latitude, lon: p.coords.longitude }, err: null }))).catch(e => setDbg(d => ({ ...d, err: e, pos: null })))
-                } catch (e) { setDbg(d => ({ ...d, err: e })) }
-              }} className="px-3 py-2 bg-slate-700 rounded text-white">Run getCurrentPosition</button>
-            </div>
-            <div className="text-sm text-slate-400">Permission: <span className="text-white">{String(dbg.perm)}</span></div>
-            <div className="text-sm text-slate-400">Position: <span className="text-white">{dbg.pos ? `${dbg.pos.lat}, ${dbg.pos.lon}` : '-'}</span></div>
-            <div className="text-sm text-rose-400">Error: <span className="text-white">{dbg.err ? (dbg.err.message || JSON.stringify(dbg.err)) : '-'}</span></div>
-            <div className="text-xs text-slate-300">If permission shows 'denied', open Chrome site settings → Location → Allow or Reset permissions, then retry.</div>
-          </div>
-        </details>
-      </div>
+      {/* debug UI removed */}
 
       <div className="mt-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-auto">
