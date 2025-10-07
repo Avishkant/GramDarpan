@@ -80,6 +80,22 @@ async function start() {
   app.use('/api/admin', adminLimiter, (req, res, next) => { req.redisClient = redisClient; next()}, adminRoutes);
   app.use('/api/geo', geoLimiter, (req, res, next) => { req.redisClient = redisClient; next()}, geoRoutes);
 
+  // Serve built client files (if present). This allows a single service deploy
+  // where the backend serves the production SPA build from client/dist.
+  const path = require('path')
+  const fs = require('fs')
+  const clientDist = path.resolve(__dirname, '..', '..', 'client', 'dist')
+  if (fs.existsSync(clientDist)) {
+    console.log('Serving client from', clientDist)
+    app.use(express.static(clientDist))
+    // SPA fallback: serve index.html for any non-API route
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(clientDist, 'index.html'))
+    })
+  } else {
+    console.log('Client dist not found at', clientDist)
+  }
+
   const port = config.PORT;
   const server = app.listen(port, () => console.log('Backend running on', port));
   server.on('error', err => {
