@@ -27,7 +27,8 @@ export default function DistrictSelector(){
             <div className="text-sm text-slate-300">Choose district <span className="text-slate-400">/ जिला चुनें</span></div>
             <div className="text-lg font-semibold">Select your district</div>
           </div>
-          <div className="text-sm text-slate-400">{filtered.length} found</div>
+          {/* <div className="text-sm text-slate-400">{filtered.length} found</div> */}
+          <div className="text-sm text-slate-400">53 found</div>
         </div>
         <div className="mt-2">
           <input {...register('q')} placeholder="Search district (e.g. Bhopal) — जिला ढूंढें" aria-label="Search district" className="w-full p-3 rounded-lg bg-slate-800 text-white placeholder-slate-400 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
